@@ -213,6 +213,16 @@ var asyncWait = 500; // ms
 var iframeSrc = ''; // will be set to './blank.html' if the environment does not report error details when src = ''.
 var iframes = [];
 Babel.registerPreset('env', babelPresetEnv.default);
+var runWithBabel = true;
+function transform(src) {
+  return Babel.transform(src, {
+    presets: [
+      ['env', {
+        'modules': false
+      }]
+    ]
+  });
+}
 
 function runSources(sources, isAsync, needsAPI, done) {
   var iframe = iframes.pop();
@@ -248,16 +258,6 @@ function runSources(sources, isAsync, needsAPI, done) {
       }
     }
 
-    var runWithBabel = true;
-    function transform(src) {
-      return Babel.transform(src, {
-        presets: [
-          ['env', {
-            'modules': false
-          }]
-        ]
-      });
-    }
     function append(src) {
       var script = w.document.createElement('script');
       if (runWithBabel) {
@@ -564,20 +564,30 @@ function addRunLink(ele) {
   progressEle.style.fontFamily = 'monospace';
 }
 
-function addSrcLink(ele, path) {
-  var srcLink = ele.appendChild(document.createElement('input'));
-  srcLink.type = 'button';
-  srcLink.value = 'Src';
-  srcLink.className = 'btn btn-default btn-xs';
-  srcLink.style.marginLeft = '5px';
-  srcLink.addEventListener('click', function(e) {
+function createButton(ele, path, value, compiled) {
+  var link = ele.appendChild(document.createElement('input'));
+  link.type = 'button';
+  link.value = value || 'Src';
+  link.className = 'btn btn-default btn-xs';
+  link.style.marginLeft = '5px';
+  link.addEventListener('click', function(e) {
     e.stopPropagation();
     var w = window.open(iframeSrc);
     loadUnit(path)(function(task, data) {
       var pre = w.document.body.appendChild(w.document.createElement('pre'));
-      pre.textContent = data;
+      if (compiled) {
+        pre.textContent = transform(data).code;
+      } else {
+        pre.textContent = data;
+      }
     }, function(){ console.error('Error loading file. This shouldn\'t happen...'); })(null);
   });
+  return link;
+}
+
+function addSrcLink(ele, path) {
+  createEl(ele, path);
+  createEl(ele, path, 'Compiled Src', true);
 }
 
 function renderTree(tree, container, path, hide) {
