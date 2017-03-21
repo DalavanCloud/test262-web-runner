@@ -215,13 +215,40 @@ var iframes = [];
 Babel.registerPreset('env', babelPresetEnv.default);
 var runWithBabel = true;
 function transform(src) {
-  return Babel.transform(src, {
-    presets: [
-      ['env', {
-        'modules': false
-      }]
-    ]
-  });
+  // https://github.com/babel/babel/commit/92e7a01d14d31f2a23d2aa32945b5b6fe6a16b9e#diff-82ce85cb96ff43f5869d3d176983dcebL24
+  // this normalizes syntax and early runtime reference errors since they're
+  // both thrown as SyntaxErrors in acorn
+  // SyntaxError: var null;
+  // ReferenceError: 1++; (runtime)
+  var lazyError = /negative:\n\s/.test(src);
+  var referenceError = src.indexOf(`
+negative:
+  phase: early
+  type: ReferenceError
+`) !== -1;
+  var strictMode = !/flags: \[noStrict\]/.test(src);
+
+  var compiled;
+
+  try {
+    compiled = Babel.transform(src, {
+      presets: [
+        ['env', {
+          'modules': false
+        }]
+      ],
+      parserOpts: {
+        strictMode
+      }
+    });
+  } catch (err) {
+    if (err && lazyError && err instanceof SyntaxError) {
+      return { code: src };
+    } else {
+      return { code: `throw new Error('${JSON.stringify(err.stack)}')`};
+    }
+  }
+  return compiled;
 }
 
 function runSources(sources, isAsync, needsAPI, done) {
@@ -260,7 +287,9 @@ function runSources(sources, isAsync, needsAPI, done) {
 
     function append(src) {
       var script = w.document.createElement('script');
-      if (runWithBabel) {
+      if (runWithBabel
+        && src.indexOf('function assert(') === -1
+        && src.indexOf('$$testFinished();') === -1) {
         script.text = transform(src).code;
       } else {
         script.text = src;
@@ -586,8 +615,8 @@ function createButton(ele, path, value, compiled) {
 }
 
 function addSrcLink(ele, path) {
-  createEl(ele, path);
-  createEl(ele, path, 'Compiled Src', true);
+  createButton(ele, path);
+  createButton(ele, path, 'Compiled Src', true);
 }
 
 function renderTree(tree, container, path, hide) {
