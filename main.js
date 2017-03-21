@@ -212,6 +212,7 @@ var noCompletionSigil = {};
 var asyncWait = 500; // ms
 var iframeSrc = ''; // will be set to './blank.html' if the environment does not report error details when src = ''.
 var iframes = [];
+Babel.registerPreset('env', babelPresetEnv.default);
 
 function runSources(sources, isAsync, needsAPI, done) {
   var iframe = iframes.pop();
@@ -246,9 +247,24 @@ function runSources(sources, isAsync, needsAPI, done) {
         w.$$testFinished();
       }
     }
+
+    var runWithBabel = true;
+    function transform(src) {
+      return Babel.transform(src, {
+        presets: [
+          ['env', {
+            'modules': false
+          }]
+        ]
+      });
+    }
     function append(src) {
       var script = w.document.createElement('script');
-      script.text = src;
+      if (runWithBabel) {
+        script.text = transform(src).code;
+      } else {
+        script.text = src;
+      }
       w.document.body.appendChild(script);
     }
 
